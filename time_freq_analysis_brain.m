@@ -1,0 +1,85 @@
+%% Time-frequency analysis of brain signals
+%%
+% Load in data
+load data4TF.mat
+
+% Plot the signal
+figure(1), clf
+subplot(411)
+plot(timevec,data,'linew',1)
+set(gca,'xlim',timevec([1 end]))
+xlabel('Time (s)'), ylabel('Voltage (\muV)')
+title('Time-domain signal')
+
+%% Create complex Morlet wavelets
+% Wavelet parameters
+nfrex = 50; % 50 frequencies
+frex  = linspace(8,70,nfrex);
+fwhm  = .2; % full-width at half-maximum in seconds
+
+% Time vector for wavelets
+wavetime = -2:1/srate:2;
+
+% Initialize matrices for wavelets
+wavelets = zeros(nfrex,length(wavetime));
+
+% Create complex Morlet wavelet family
+for wi=1:nfrex
+    % Gaussian
+    gaussian = exp( -(4*log(2)*wavetime.^2) / fwhm^2 );
+    
+    % Complex Morlet wavelet
+    wavelets(wi,:) = exp(1i*2*pi*frex(wi)*wavetime) .* gaussian;
+end
+
+% Show the wavelets
+figure(2), clf
+subplot(411)
+plot(wavetime,real(wavelets(10,:)), wavetime,imag(wavelets(10,:)))
+xlabel('Time')
+legend({'Real';'Imaginary'})
+
+subplot(4,1,2:4)
+contourf(wavetime,frex,real(wavelets),40,'linecolor','none')
+xlabel('Time (s)'), ylabel('Frequency (Hz)')
+title('Real part of wavelets')
+
+%% Run convolution using spectral multiplication
+% Convolution parameters
+nconv = length(timevec) + length(wavetime) - 1; % M+N-1
+halfk = floor(length(wavetime)/2);
+
+% Fourier spectrum of the signal
+dataX = fft(data,nconv);
+
+% Initialize time-frequency matrix
+tf = zeros(nfrex,length(timevec));
+
+% Convolution per frequency
+for fi=1:nfrex 
+    % FFT of the wavelet
+    waveX = fft(wavelets(fi,:),nconv);
+
+    % Amplitude-normalize the wavelet
+    waveX = waveX./max(waveX);
+    
+    % Convolution
+    convres = ifft( waveX.*dataX );
+
+    % Trim the "wings"
+    convres = convres(halfk:end-halfk);
+    
+    % Extract power from complex signal
+    tf(fi,:) = abs(convres).^2;
+end
+
+%% Plot the results
+figure(1)
+subplot(4,1,[2 3 4])
+contourf(timevec,frex,tf,40,'linecolor','none')
+xlabel('Time (s)'), ylabel('Frequency (Hz)')
+set(gca,'clim',[0 1e3])
+title('Time-frequency power')
+colormap hot
+
+%% end.
